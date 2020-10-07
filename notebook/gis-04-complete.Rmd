@@ -8,7 +8,7 @@ output:
 ---
 
 ## Introduction
-This notebook focuses on geoprocessing - the process of wrangling geometric data.
+This notebook focuses on geoprocessing - the process of wrangling geometric data. We'll cover dissolves, intersects, clips, and working with centroids.
 
 ## Dependencies
 This notebook requires a variety of packages for working with spatial data:
