@@ -5,12 +5,12 @@
 [![](https://img.shields.io/github/last-commit/slu-dss/gis-04.svg)](https://github.com/slu-dss/gis-04/commits/master)
 
 ## Lesson Overview
-This repository contains the third lesson for our series on GIS work in `R`. We'll focus on creating thematic choropleth maps in both `ggplot2` and `tmap` this week.
+This repository contains the third lesson for our series on GIS work in `R`. We'll focus on geoprocessing, which is a set of techniques for (a) modifying the geometric data we are working with or (b) using our geometric data as a starting point for modifying our attributes.
 
 ### Objectives
 At the end of this lesson, participants should be able to:
 
-1. Perform common geoprocessing techniques in `R`, including identifying centroids, intersecting features, and dissolving features
+1. Perform common geoprocessing techniques in `R`, including identifying centroids, intersecting and clipping features, and dissolving features
 
 ### Lesson Resources
 * The [`notebook/`](/notebook) directory contains the materials for this lesson.
