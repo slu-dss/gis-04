@@ -25,8 +25,8 @@ If you participated in the first session, there is no new software for today. Ho
 
 ```r
 install.packages(c("tidyverse", "here", "knitr",
-                   "mapview", "rmarkdown", "sf",
-                   "tigris", "usethis"))
+                   "nngeo", "mapview", "rmarkdown", 
+                   "sf", "tigris", "usethis"))
 ```
 
 ### Access Lesson

@@ -1,0 +1,180 @@
+---
+title: "GIS-04 - Geoprocessing - Complete"
+author: "Christopher Prener, Ph.D."
+date: '(`r format(Sys.time(), "%B %d, %Y")`)'
+output:
+  github_document: default
+  html_notebook: default
+---
+
+## Introduction
+This notebook focuses on geoprocessing - the process of wrangling geometric data.
+
+## Dependencies
+This notebook requires a variety of packages for working with spatial data:
+
+```{r load-packages}
+# tidyverse packages
+library(dplyr)        # data wrangling
+
+# spatial packages
+library(nngeo)        # geoprocessing tools
+library(mapview)      # preview spatial data
+library(sf)           # spatial data tools
+
+# other packages
+library(here)         # file path management
+```
+
+## Load Data
+First, we need to load up our data. This is review from the first session, and so we've pre-filled the code for you. We'll automatically re-project the data as well (also review):
+
+```{r load-data}
+# point data - 2012 Homicides in St. Louis
+homicides <- st_read(here("data", "STL_CRIME_Murders12", "STL_CRIME_Murders12.shp")) %>%
+  st_transform(crs = 26915)
+
+# point data - 2018 Public Schools in Missouri
+schools <- st_read(here("data", "MO_EDU_PublicK12", "MO_EDU_PublicK12.shp")) %>%
+  st_transform(crs = 26915)
+
+# polygon data 1 - St. Louis Voting Precincts
+precincts <- st_read(here("data", "POL_WRD_2010_Prec", "POL_WRD_2010_Prec.shp"))%>%
+  st_transform(crs = 26915)
+
+# polygon data 2 - St. Louis Census Tracts
+demos <- st_read(here("data", "STL_DEMOS_POP", "STL_DEMOS_POP.shp")) %>%
+  st_transform(crs = 26915)
+```
+
+## Dissolving Features
+In our `precincts` data, we have a variable named `WARD10`. This is the City Ward that each preinct falls within. If we wanted to map wards instead of precincts, we can modify our geometric data using `group_by()` and `summarise()`:
+
+```{r dissolve-ward}
+precincts %>%
+  select(WARD10) %>%
+  rename(ward = WARD10) %>%
+  group_by(ward) %>%
+  summarise() -> ward
+```
+
+Once these have been dissolved, we can explore them with `mapview()`:
+
+```{r explore-ward}
+mapview(ward)
+```
+
+Notice how some wards, such as Ward 4 and Ward 21 in North City, Ward 6 and Ward 7 in Downtown, and Wards 12, 15, and 23 in South City have "holes." These are common artifacts of the dissolve process that result from precincts' geometries not *perfectly* abutting each other.
+
+The `nngeo` package has a great function `st_remove_holes()` that can be used to get rid of these:
+
+```{r remove-ward-holes}
+ward <- st_remove_holes(ward)
+```
+
+We can check out the differences with `mapview()`:
+
+```{r check-ward}
+mapview(ward)
+```
+
+We're going to repeat this process, but this time we'll combine a number of the wards into a single polygon for "North City."
+
+```{r dissolve-northCity}
+## create vector
+northCity <- c(1, 2, 3, 4, 5, 18, 21, 22, 26, 27)
+
+## subset
+ward %>%
+  mutate(northCity = ifelse(ward %in% northCity, TRUE, FALSE)) %>%
+  group_by(northCity) %>%
+  summarise() %>%
+  filter(northCity == TRUE) %>%
+  st_remove_holes() -> northCity
+```
+
+Let's inspect these data again for holes with `mapview()`:
+
+```{r inspect-northCity}
+mapview(northCity)
+```
+
+## Intersecting Data
+We can use another geoprocessing technique, intersects, to identify points that lie within our polygons. For instance, we can identify which wards homicides occur in:
+
+```{r intersect-homicides}
+## intersect
+homicides <- st_intersection(homicides, ward)
+
+## preview
+head(homicides)
+```
+
+We can also use this to subset our data, which is a related technique sometimes called "clipping." For example, our schools data covers the entire State of Missouri. If we only wanted schools in the City of St. Louis, we could intersect them:
+
+```{r intersect-schools}
+## intersect
+schoolsSTL <- st_intersection(schools, ward)
+
+## preview
+head(schoolsSTL)
+```
+
+## Centroids
+Another related geoprocessing task is using centroids to find out if polygons lie within a larger polygon or not. We use their geometric center, called a centroid, for this task. For instance, I may want to know which census tracts lie within North City. To get a sense of how these data change, we'll start by previewing our `demos` data:
+
+```{r}
+mapview(demos)
+```
+
+We'll start by calculating the geometric center (i.e. the centroid) for all of our centroids:
+
+```{r tract-centroids}
+## calculate centroids
+demoCentroids <- st_centroid(demos)
+
+## preview
+mapview(demoCentroids)
+```
+
+Notice that the attributes are totally preserved. Sometimes this is ideal, other times it is not. For this example we'll do is subset our columns so that we only have `GEOID` remaining, and then intersect our centroids with our `northCity` feature:
+
+```{r intersect-tracts}
+## subset and intersect
+demoCentroids %>%
+  select(GEOID) %>%
+  st_intersection(., northCity) -> demoCentroids
+
+## preview
+mapview(demoCentroids)
+```
+
+There are two ways to get our `TRUE` indicator back into our data. One is a "table join," the other is to create a new column by referencing our geoprocessed data. We'll illustrate the join first:
+
+```{r join-northCity}
+## make a copy of our centroid data
+demoCentroids2 <- demoCentroids
+
+## remove geometry from centroids data
+st_geometry(demoCentroids2) <- NULL
+
+## preform table join
+demos_modified <- left_join(demos, demoCentroids2, by = "GEOID")
+
+## preview
+head(demos_modified)
+```
+
+Notice that tracts not in North City have `NA` value for the `northCity` column. This isn't ideal, so we'll fill those `NA` values in with `FALSE` values:
+
+```{r fix-FALSE}
+demos_modified <- mutate(demos_modified, northCity = ifelse(is.na(northCity) == TRUE, FALSE, northCity))
+```
+
+This is all pretty verbose, so we'll illustrate a quicker way to apply these data without a table join:
+
+```{r mutate-northCity}
+demos <- mutate(demos, northCity = ifelse(GEOID %in% demoCentroids$GEOID == TRUE, TRUE, FALSE))
+```
+
+This is far more succinct code, which means it is easier to debug and trouble shoot!
